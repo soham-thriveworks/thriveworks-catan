@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thriveworks Catan</title>
+  <link rel="stylesheet" href="../src/styles/main.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- CDN Dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Components (load in dependency order, before App) -->
+  <script type="text/babel" src="../src/components/Lobby.js"></script>
+  <script type="text/babel" src="../src/components/Board.js"></script>
+  <script type="text/babel" src="../src/components/Dice.js"></script>
+  <script type="text/babel" src="../src/components/PlayerHUD.js"></script>
+  <script type="text/babel" src="../src/components/TradePanel.js"></script>
+  <script type="text/babel" src="../src/components/Chat.js"></script>
+  <script type="text/babel" src="../src/components/DevIncident.js"></script>
+  <script type="text/babel" src="../src/components/FundingCardModal.js"></script>
+
+  <!-- Main App (last — depends on all components) -->
+  <script type="text/babel" src="../src/App.js"></script>
+</body>
+</html>

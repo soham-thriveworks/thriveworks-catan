@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Funding Card Preview</title>
+  <link rel="stylesheet" href="../src/styles/main.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { background: #1a1a2e; display: flex; gap: 24px; padding: 32px; flex-wrap: wrap; }
+    .preview-col { display: flex; flex-direction: column; gap: 16px; }
+    .preview-label { color: rgba(255,255,255,0.4); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-family: Inter, sans-serif; margin-bottom: -8px; }
+    .sidebar { width: 280px; background: #1e2640; border-radius: 12px; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" src="../src/components/PlayerHUD.js"></script>
+  <script type="text/babel" src="../src/components/FundingCardModal.js"></script>
+
+  <script type="text/babel">
+    const MOCK_SOCKET = { emit: (ev, d) => console.log('emit:', ev, d) };
+
+    // Scenario A — has 3 funding cards, it's your turn, has rolled
+    const playerWithCards = {
+      id: 'alice',
+      name: 'Alice',
+      color: 'green',
+      resources: { therapist: 2, payerContracts: 1, coeStaff: 0, rcmStaff: 1, clinOps: 2 },
+      fundingCards: [
+        { type: 'engineer' },
+        { type: 'recruitmentDrive' },
+        { type: 'networkExpansion' },
+      ],
+      victoryPoints: 3,
+    };
+
+    // Scenario B — just bought a card, not yet your turn
+    const playerJustBought = {
+      ...playerWithCards,
+      name: 'Bob',
+      color: 'blue',
+      resources: { therapist: 0, payerContracts: 0, coeStaff: 0, rcmStaff: 0, clinOps: 0 },
+      fundingCards: [{ type: 'exclusivePayerContract' }],
+      victoryPoints: 2,
+    };
+
+    const mockGameState = { phase: 'main', players: [playerWithCards, playerJustBought] };
+
+    function Preview() {
+      const [buildMode, setBuildMode] = React.useState(null);
+      const [activeCard, setActiveCard] = React.useState(null);
+      return (
+        <div style={{ display: 'flex', gap: 32, padding: 32, background: '#1a1a2e', minHeight: '100vh', flexWrap: 'wrap' }}>
+
+          {activeCard && (
+            <window.FundingCardModal
+              cardType={activeCard}
+              socket={MOCK_SOCKET}
+              canPlay={true}
+              onClose={() => setActiveCard(null)}
+              onActivate={() => setActiveCard(null)}
+            />
+          )}
+
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>
+              Your turn · has rolled · 3 funding cards
+            </div>
+            <div className="sidebar">
+              <window.PlayerHUD
+                player={playerWithCards}
+                gameState={mockGameState}
+                myPlayerId="alice"
+                socket={MOCK_SOCKET}
+                isMyTurn={true}
+                hasRolled={true}
+                onBuildModeChange={setBuildMode}
+                onFundingCardClick={setActiveCard}
+                buildMode={buildMode}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>
+              Not your turn · 1 funding card
+            </div>
+            <div className="sidebar">
+              <window.PlayerHUD
+                player={playerJustBought}
+                gameState={mockGameState}
+                myPlayerId="bob"
+                socket={MOCK_SOCKET}
+                isMyTurn={false}
+                hasRolled={false}
+                onBuildModeChange={() => {}}
+                buildMode={null}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>
+              Your turn · hasn't rolled yet
+            </div>
+            <div className="sidebar">
+              <window.PlayerHUD
+                player={{ ...playerWithCards, resources: { therapist: 4, payerContracts: 4, coeStaff: 3, rcmStaff: 3, clinOps: 3 } }}
+                gameState={mockGameState}
+                myPlayerId="alice"
+                socket={MOCK_SOCKET}
+                isMyTurn={true}
+                hasRolled={false}
+                onBuildModeChange={setBuildMode}
+                onFundingCardClick={setActiveCard}
+                buildMode={buildMode}
+              />
+            </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Preview />);
+  </script>
+  <div id="root"></div>
+</body>
+</html>
