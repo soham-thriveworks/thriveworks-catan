@@ -292,32 +292,48 @@ class Board {
       return Math.atan2((p1.y + p2.y) / 2, (p1.x + p2.x) / 2);
     }
 
-    // Sort by angle (-π … π)
-    const sortedPerimeter = [...perimeterEdges].sort((a, b) => edgeMidAngle(a) - edgeMidAngle(b));
+    // Normalise angles to [0, 2π) and apply a random rotation so layout varies per game
+    const TWO_PI = Math.PI * 2;
+    const rotOffset = this._rng() * TWO_PI;
+    const edgesWithAngles = perimeterEdges.map(e => {
+      let a = edgeMidAngle(e);
+      if (a < 0) a += TWO_PI;
+      a = (a - rotOffset + TWO_PI) % TWO_PI;
+      return { edge: e, angle: a };
+    });
 
-    // Pick every other edge starting at a random offset so placement varies per game
-    const startOffset = Math.floor(this._rng() * 2); // 0 or 1
+    // Divide the perimeter into 9 equal sectors (40° each) and pick the edge
+    // closest to each sector's centre. This guarantees one port per sector and
+    // an even spread regardless of how many perimeter edges the board has.
     const chosen = [];
     const usedVertices = new Set();
-    for (let i = startOffset; i < sortedPerimeter.length && chosen.length < 9; i += 2) {
-      const edge = sortedPerimeter[i];
-      const [v1, v2] = edge.vertexIds;
-      if (usedVertices.has(v1) || usedVertices.has(v2)) continue;
-      chosen.push(edge);
-      usedVertices.add(v1);
-      usedVertices.add(v2);
+    const sectorSize = TWO_PI / 9;
+
+    for (let s = 0; s < 9; s++) {
+      const sectorMid = (s + 0.5) * sectorSize;
+      const candidates = edgesWithAngles
+        .filter(({ angle }) => angle >= s * sectorSize && angle < (s + 1) * sectorSize)
+        .filter(({ edge }) => !usedVertices.has(edge.vertexIds[0]) && !usedVertices.has(edge.vertexIds[1]))
+        .sort((a, b) => Math.abs(a.angle - sectorMid) - Math.abs(b.angle - sectorMid));
+
+      if (candidates.length > 0) {
+        const { edge } = candidates[0];
+        chosen.push(edge);
+        usedVertices.add(edge.vertexIds[0]);
+        usedVertices.add(edge.vertexIds[1]);
+      }
     }
-    // Fallback: if board geometry is unusual and we got fewer than 9, fill greedily
+
+    // Fallback: if a sector had no candidates, fill greedily from remaining edges
     if (chosen.length < 9) {
       const chosenIds = new Set(chosen.map(e => e.id));
-      for (const edge of shuffle([...perimeterEdges], this._rng)) {
+      for (const { edge } of shuffle([...edgesWithAngles], this._rng)) {
         if (chosen.length >= 9) break;
         if (chosenIds.has(edge.id)) continue;
-        const [v1, v2] = edge.vertexIds;
-        if (usedVertices.has(v1) || usedVertices.has(v2)) continue;
+        if (usedVertices.has(edge.vertexIds[0]) || usedVertices.has(edge.vertexIds[1])) continue;
         chosen.push(edge);
-        usedVertices.add(v1);
-        usedVertices.add(v2);
+        usedVertices.add(edge.vertexIds[0]);
+        usedVertices.add(edge.vertexIds[1]);
       }
     }
 

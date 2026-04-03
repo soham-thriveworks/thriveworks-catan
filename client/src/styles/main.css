@@ -676,21 +676,7 @@ input:focus, select:focus { border-color: var(--primary); }
 }
 .dice-total.seven { color: var(--danger); }
 
-/* Resource float animation — HTML div overlaid on board */
-@keyframes resourceFloat {
-  0%   { transform: translate(-50%, -50%);               opacity: 1; }
-  20%  { transform: translate(-50%, calc(-50% - 20px));  opacity: 1; }
-  100% { transform: translate(-50%, calc(-50% - 90px));  opacity: 0; }
-}
-.resource-float-anim {
-  position: absolute;
-  pointer-events: none;
-  z-index: 10;
-  font-size: 30px;
-  line-height: 1;
-  user-select: none;
-  animation: resourceFloat 1.6s ease-out forwards;
-}
+/* Resource float animation — HTML div overlaid on board (definition below) */
 
 /* Dev Incident flash */
 .dev-incident-alert {
@@ -1367,19 +1353,35 @@ input:focus, select:focus { border-color: var(--primary); }
    RESOURCE FLOAT ANIMATION — board overlay divs
    ================================================================ */
 @keyframes resourceFloat {
-  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
-  15%  { transform: translate(-50%, -65%) scale(1.5); opacity: 1; }
-  60%  { transform: translate(-50%, -130%) scale(1.2); opacity: 1; }
-  100% { transform: translate(-50%, -180%) scale(0.8); opacity: 0; }
+  0%   { transform: translate(-50%, -50%) scale(0.7);                        opacity: 0; }
+  12%  { transform: translate(-50%, -80%) scale(1.4);                        opacity: 1; }
+  60%  { transform: translate(calc(-50% + 200px), -120%) scale(1.1);         opacity: 1; }
+  100% { transform: translate(calc(-50% + 420px),  -60%) scale(0.6);         opacity: 0; }
 }
 .resource-float-anim {
   position: absolute;
   z-index: 50;
   font-size: 32px;
   pointer-events: none;
-  animation: resourceFloat 1.6s ease-out forwards;
+  animation: resourceFloat 1.0s ease-in-out forwards;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
 }
+/* Steal animation — fixed overlay, flies from victim to thief */
+@keyframes stealMove {
+  0%   { transform: translate(-50%, -50%) scale(0.5);                                              opacity: 0; }
+  12%  { transform: translate(-50%, -50%) scale(1.5);                                              opacity: 1; }
+  80%  { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1);          opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.5);          opacity: 0; }
+}
+.steal-anim {
+  position: fixed;
+  z-index: 1000;
+  font-size: 36px;
+  pointer-events: none;
+  animation: stealMove 1.1s ease-in-out forwards;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.7));
+}
+
 .board-svg-wrap {
   position: relative;
   overflow: visible;

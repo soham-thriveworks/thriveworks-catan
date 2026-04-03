@@ -96,7 +96,7 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
         <div className="lobby-logo-wrap">
           <img className="lobby-logo" src="/thriveworks-logo.png" alt="Thriveworks" onError={e => { e.target.style.display='none'; }} />
           <div className="lobby-title">Thriveworks Catan</div>
-          <div className="lobby-subtitle">Internal Hackathon Edition</div>
+          <div className="lobby-subtitle">Build your practice. Grow your network.</div>
         </div>
 
         <div className="lobby-card">

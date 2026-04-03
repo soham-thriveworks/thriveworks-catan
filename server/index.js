@@ -160,6 +160,19 @@ io.on('connection', (socket) => {
   // -------------------------------------------------------------------------
   // roll_dice
   // -------------------------------------------------------------------------
+  const DEV_INCIDENT_MESSAGES = [
+    '🚨 Booking platform is down!',
+    '🔥 AWS outage!',
+    '💥 AMD update caused a meltdown!!',
+    '😩 Cross state clinician got double booked :(',
+    '⚠️ HL7 port outage!',
+    '🛑 ThriveCare authentication service is unreachable!',
+    '📉 Reporting dashboard just crashed mid-demo!',
+    '🔴 Payer eligibility API is timing out!',
+    '😱 Prod deploy rolled back after 5 minutes!',
+    '🌩️ Database failover triggered in us-east-1!',
+  ];
+
   socket.on('roll_dice', () => {
     const ctx = getRoomContext(socket);
     if (!ctx || !ctx.gameState) return sendError(socket, 'Game not started.');
@@ -168,12 +181,17 @@ io.on('connection', (socket) => {
     const result = gameState.rollDice(playerDef.id);
     if (result.error) return sendError(socket, result.error);
 
+    const devIncidentMessage = result.total === 7
+      ? DEV_INCIDENT_MESSAGES[Math.floor(Math.random() * DEV_INCIDENT_MESSAGES.length)]
+      : null;
+
     io.to(roomCode).emit('dice_rolled', {
       dice: result.dice,
       total: result.total,
       playerId: playerDef.id,
       playerName: playerDef.name,
       resourcesProduced: result.resourcesProduced || [],
+      devIncidentMessage,
     });
 
     // If dev incident triggered, notify players who must discard
@@ -368,7 +386,7 @@ io.on('connection', (socket) => {
     const ctx = getRoomContext(socket);
     if (!ctx || !ctx.gameState) return sendError(socket, 'Game not started.');
 
-    const { roomCode, gameState, playerDef } = ctx;
+    const { roomCode, gameState, playerDef, room } = ctx;
 
     // Phase: DEV_INCIDENT_MOVE
     if (gameState.phase === 'dev_incident_move') {
@@ -393,6 +411,12 @@ io.on('connection', (socket) => {
       if (result.error) return sendError(socket, result.error);
 
       broadcastGameState(roomCode);
+
+      // Animate the steal on everyone's screen
+      io.to(roomCode).emit('steal_animation', {
+        thiefId: playerDef.id,
+        victimId: targetPlayerId,
+      });
 
       // Notify both players of what was stolen
       if (result.stolenResource) {

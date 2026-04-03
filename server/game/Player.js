@@ -167,7 +167,7 @@ class Player {
       resources: isSelf ? { ...this.resources } : {},
       resourceCount: this.totalResourceCount(),
       fundingCardCount: this.fundingCards.length,
-      fundingCards: isSelf ? this.fundingCards.map(c => ({ type: c.type })) : undefined,
+      fundingCards: isSelf ? this.fundingCards.map(c => ({ type: c.type, isNew: this.newFundingCards.includes(c) })) : undefined,
       playedEngineers: this.playedEngineers,
       networks: [...this.networks],
       practiceLocations: [...this.practiceLocations],

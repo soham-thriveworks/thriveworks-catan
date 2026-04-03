@@ -37,11 +37,36 @@
   }) {
     const [buildMode, setBuildMode] = useState(null);
     const [sidebarTab, setSidebarTab] = useState('resources');
+    const [stealAnim, setStealAnim] = useState(null);
 
     // Auto-switch to Trade tab when incoming proposal arrives
     useEffect(() => {
       if (tradeAlertSeq > 0) setSidebarTab('trade');
     }, [tradeAlertSeq]);
+
+    // Steal animation — triggered by server broadcast to entire room
+    useEffect(() => {
+      if (!socket) return;
+      function handleStealAnimation({ thiefId, victimId }) {
+        const fromEl = document.querySelector(`[data-player-id="${victimId}"]`);
+        const toEl   = document.querySelector(`[data-player-id="${thiefId}"]`);
+        if (!fromEl || !toEl) return;
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect   = toEl.getBoundingClientRect();
+        const fromX = fromRect.left + fromRect.width / 2;
+        const fromY = fromRect.top  + fromRect.height / 2;
+        setStealAnim({
+          key: Date.now(),
+          fromX,
+          fromY,
+          dx: (toRect.left + toRect.width  / 2) - fromX,
+          dy: (toRect.top  + toRect.height / 2) - fromY,
+        });
+        setTimeout(() => setStealAnim(null), 1200);
+      }
+      socket.on('steal_animation', handleStealAnimation);
+      return () => socket.off('steal_animation', handleStealAnimation);
+    }, [socket]);
     const [activeCardModal, setActiveCardModal] = useState(null); // cardType string or null
     const [networkExpansionEdges, setNetworkExpansionEdges] = useState([]);
     // buildMode: null | 'road' | 'settlement' | 'city' | 'devIncident' | 'networkExpansion'
@@ -220,7 +245,7 @@
         </div>
 
         {/* Right sidebar */}
-        <div className="sidebar">
+        <div className="sidebar" data-player-id={myPlayerId}>
           {/* Dice */}
           <window.Dice
             dice={diceState.dice}
@@ -314,7 +339,12 @@
           <window.FundingCardModal
             cardType={activeCardModal}
             socket={socket}
-            canPlay={isMyTurn && hasRolled}
+            canPlay={
+              isMyTurn &&
+              hasRolled &&
+              !gameState.hasPlayedFundingCard &&
+              (me?.fundingCards || []).some(c => c.type === activeCardModal && !c.isNew)
+            }
             onClose={() => setActiveCardModal(null)}
             onActivate={mode => {
               if (mode === 'engineer') setBuildMode('devIncident');
@@ -331,6 +361,22 @@
           devIncidentPhase={devIncidentPhase}
           mustDiscard={mustDiscard}
         />
+
+        {/* Steal animation */}
+        {stealAnim && (
+          <div
+            key={stealAnim.key}
+            className="steal-anim"
+            style={{
+              left: stealAnim.fromX,
+              top: stealAnim.fromY,
+              '--dx': `${stealAnim.dx}px`,
+              '--dy': `${stealAnim.dy}px`,
+            }}
+          >
+            🃏
+          </div>
+        )}
 
         {/* Steal toast */}
         {stealToast && (
@@ -401,19 +447,6 @@
     const [tradeAlertSeq, setTradeAlertSeq] = useState(0);
 
     // ---- Dev Incident message pool ----
-    const DEV_INCIDENT_MESSAGES = [
-      '🚨 Booking platform is down!',
-      '🔥 AWS outage!',
-      '💥 AMD update caused a meltdown!!',
-      '😩 Cross state clinician got double booked :(',
-      '⚠️ HL7 port outage!',
-      '🛑 ThriveCare authentication service is unreachable!',
-      '📉 Reporting dashboard just crashed mid-demo!',
-      '🔴 Payer eligibility API is timing out!',
-      '😱 Prod deploy rolled back after 5 minutes!',
-      '🌩️ Database failover triggered in us-east-1!',
-    ];
-
     // ---- Dice state ----
     const [diceState, setDiceState] = useState({ dice: null, rolling: false, total: null });
     const [devIncidentMessage, setDevIncidentMessage] = useState(null);
@@ -463,11 +496,8 @@
         therapist: '🧑‍⚕️', payerContracts: '📋', coeStaff: '👥', rcmStaff: '💰', clinOps: '⚙️',
       };
 
-      socket.on('dice_rolled', ({ dice, total, playerId, playerName, resourcesProduced }) => {
-        const msg = total === 7
-          ? DEV_INCIDENT_MESSAGES[Math.floor(Math.random() * DEV_INCIDENT_MESSAGES.length)]
-          : null;
-        if (msg) setDevIncidentMessage(msg);
+      socket.on('dice_rolled', ({ dice, total, playerId, playerName, resourcesProduced, devIncidentMessage }) => {
+        if (devIncidentMessage) setDevIncidentMessage(devIncidentMessage);
         setDiceState({ dice, rolling: true, total });
         // Spawn resource float animations after dice settle (~1s)
         if (resourcesProduced && resourcesProduced.length > 0) {
@@ -479,13 +509,13 @@
               delay: i * 200,
             }));
             setResourceAnimations(anims);
-            setTimeout(() => setResourceAnimations([]), 2800);
+            setTimeout(() => setResourceAnimations([]), 2000);
           }, 1000);
         }
         setTimeout(() => setDiceState({ dice, rolling: false, total }), 1600);
         setMessages(prev => [...prev, {
           type: 'system',
-          message: `🎲 ${playerName || playerId} rolled ${dice[0]} + ${dice[1]} = ${total}${total === 7 ? ` — DEV INCIDENT! ${msg}` : ''}`,
+          message: `🎲 ${playerName || playerId} rolled ${dice[0]} + ${dice[1]} = ${total}${total === 7 ? ` — DEV INCIDENT! ${devIncidentMessage || ''}` : ''}`,
         }]);
       });
 

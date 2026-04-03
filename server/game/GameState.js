@@ -819,6 +819,7 @@ class GameState {
       fundingDeck: this.fundingDeck.toJSON(),
       lastRoll: this.lastRoll,
       hasRolled: this.hasRolled,
+      hasPlayedFundingCard: this.hasPlayedFundingCard,
       largestNetworkHolder: this.largestNetworkHolder,
       largestNetworkLength: this.largestNetworkLength,
       largestEngineeringTeamHolder: this.largestEngineeringTeamHolder,

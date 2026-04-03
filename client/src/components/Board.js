@@ -405,8 +405,8 @@ window.Board = function Board({
       const dx = mx - CENTER_X;
       const dy = my - CENTER_Y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const labelX = mx + (dx / dist) * 32;
-      const labelY = my + (dy / dist) * 32;
+      const labelX = mx + (dx / dist) * 52;
+      const labelY = my + (dy / dist) * 52;
 
       const isGeneric = port.resource === 'generic' || port.resource === 'any';
       // Line 1: emoji + ratio  Line 2: resource abbreviation
