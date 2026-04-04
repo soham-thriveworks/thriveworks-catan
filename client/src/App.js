@@ -30,19 +30,20 @@
     devIncidentPhase,
     mustDiscard,
     resourceAnimations,
-    tradeAlertSeq,
     stealToast,
     socket,
     onGameOver,
   }) {
     const [buildMode, setBuildMode] = useState(null);
-    const [sidebarTab, setSidebarTab] = useState('resources');
     const [stealAnim, setStealAnim] = useState(null);
+    const [tradeAnim, setTradeAnim] = useState(null);
 
-    // Auto-switch to Trade tab when incoming proposal arrives
-    useEffect(() => {
-      if (tradeAlertSeq > 0) setSidebarTab('trade');
-    }, [tradeAlertSeq]);
+    const RES_EMOJI_TRADE = { therapist: '🧑‍⚕️', payerContracts: '📋', coeStaff: '👥', rcmStaff: '💰', clinOps: '⚙️' };
+    function getFirstResourceEmoji(resources) {
+      if (!resources) return '🃏';
+      const key = Object.keys(resources)[0];
+      return RES_EMOJI_TRADE[key] || '🃏';
+    }
 
     // Steal animation — triggered by server broadcast to entire room
     useEffect(() => {
@@ -67,8 +68,50 @@
       socket.on('steal_animation', handleStealAnimation);
       return () => socket.off('steal_animation', handleStealAnimation);
     }, [socket]);
+
+    // Trade exchange animation — triggered when a trade is accepted
+    useEffect(() => {
+      if (!socket) return;
+      function handleTradeAnimation({ accepted, fromPlayerId, toPlayerId, offering, requesting }) {
+        if (!accepted) return;
+        const fromEl = document.querySelector(`[data-player-id="${fromPlayerId}"]`);
+        const toEl   = document.querySelector(`[data-player-id="${toPlayerId}"]`);
+        if (!fromEl || !toEl) return;
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect   = toEl.getBoundingClientRect();
+        const fromX = fromRect.left + fromRect.width  / 2;
+        const fromY = fromRect.top  + fromRect.height / 2;
+        const toX   = toRect.left  + toRect.width  / 2;
+        const toY   = toRect.top   + toRect.height / 2;
+        setTradeAnim({
+          key: Date.now(),
+          fromX, fromY, toX, toY,
+          dx: toX - fromX,
+          dy: toY - fromY,
+          offeringEmoji:   getFirstResourceEmoji(offering),
+          requestingEmoji: getFirstResourceEmoji(requesting),
+        });
+        setTimeout(() => setTradeAnim(null), 1400);
+      }
+      socket.on('trade_resolved', handleTradeAnimation);
+      return () => socket.off('trade_resolved', handleTradeAnimation);
+    }, [socket]);
+
+    // Hurry-up notification
+    useEffect(() => {
+      if (!socket) return;
+      function handleHurryUp({ fromPlayerName }) {
+        setHurryUp({ fromPlayerName, key: Date.now() });
+        setTimeout(() => setHurryUp(null), 3500);
+      }
+      socket.on('hurry_up', handleHurryUp);
+      return () => socket.off('hurry_up', handleHurryUp);
+    }, [socket]);
+
     const [activeCardModal, setActiveCardModal] = useState(null); // cardType string or null
     const [networkExpansionEdges, setNetworkExpansionEdges] = useState([]);
+    const [rollReminder, setRollReminder] = useState(false);
+    const [hurryUp, setHurryUp] = useState(null); // { fromPlayerName, key }
     // buildMode: null | 'road' | 'settlement' | 'city' | 'devIncident' | 'networkExpansion'
 
     const players = gameState.players || [];
@@ -96,6 +139,14 @@
       if (isMyTurn && phase === 'dev_incident_move') return 'devIncident';
       return buildMode;
     })();
+
+    // ---- Roll reminder: nudge current player after 20s of not rolling ----
+    useEffect(() => {
+      setRollReminder(false);
+      if (!isMyTurn || hasRolled || isInitialPlacement) return;
+      const t = setTimeout(() => setRollReminder(true), 20000);
+      return () => clearTimeout(t);
+    }, [isMyTurn, hasRolled, isInitialPlacement, gameState.currentPlayerId]);
 
     // ---- Board interaction handlers ----
     function handleVertexClick(vertexId) {
@@ -138,9 +189,13 @@
     function handleHexClick(hexId) {
       if (!isMyTurn) return;
       if (effectiveBuildMode === 'devIncident') {
-        // After a 7 roll: move the dev incident to chosen hex
-        // After playing an engineer card: same event
-        socket.emit('move_dev_incident', { hexId });
+        if (phase === 'dev_incident_move') {
+          // After a 7 roll — server is already in dev_incident_move phase
+          socket.emit('move_dev_incident', { hexId });
+        } else {
+          // After clicking an engineer card — tell server to play the card + move the incident
+          socket.emit('play_engineer', { hexId });
+        }
         setBuildMode(null);
       }
     }
@@ -185,6 +240,15 @@
               🏆 Leading: {vpLeader.name} ({vpLeader.victoryPoints || 0} VP)
             </span>
           )}
+          {!isMyTurn && !isInitialPlacement && (
+            <button
+              className="btn-hurry-up"
+              onClick={() => socket.emit('hurry_up')}
+              title="Nudge the current player"
+            >
+              ⌚ Hurry Up
+            </button>
+          )}
         </div>
       );
     }
@@ -199,8 +263,13 @@
             Players:
           </span>
           {others.map(p => {
-            const totalCards = p.resourceCount != null ? p.resourceCount : Object.values(p.resources || {}).reduce((a, b) => a + b, 0);
-            const isActive = p.id === currentPlayerId;
+            const totalResources = p.resourceCount != null ? p.resourceCount : Object.values(p.resources || {}).reduce((a, b) => a + b, 0);
+            const practices    = (p.practiceLocations || []).length;
+            const markets      = (p.stateNetworks || []).length;
+            const networks     = (p.networks || []).length;
+            const fundingCards = p.fundingCardCount || 0;
+            const engineers    = p.playedEngineers || 0;
+            const isActive     = p.id === currentPlayerId;
             return (
               <div
                 key={p.id}
@@ -210,13 +279,16 @@
                 <div className="other-player-header">
                   <div className="other-player-dot" style={{ backgroundColor: playerColor(p) }} />
                   <span className="other-player-name">{p.name}</span>
-                  {isActive && <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#F5A623' }}>●</span>}
+                  <span className="other-player-vp">⭐ {p.victoryPoints || 0}</span>
+                  {isActive && <span style={{ marginLeft: '4px', fontSize: '10px', color: '#F5A623' }}>●</span>}
                 </div>
                 <div className="other-player-stats">
-                  <span className="other-player-stat">⭐ {p.victoryPoints || 0} VP</span>
-                  <span className="other-player-stat">🃏 {totalCards}</span>
-                  <span className="other-player-stat">🏥 {p.settlements || 0}</span>
-                  <span className="other-player-stat">🛣️ {p.roads || 0}</span>
+                  <span className="other-player-stat" title="Resources">🗂️ {totalResources}</span>
+                  <span className="other-player-stat" title="Funding Cards">🃏 {fundingCards}</span>
+                  <span className="other-player-stat" title="Practice Locations">🏥 {practices}</span>
+                  <span className="other-player-stat" title="Markets">🏛️ {markets}</span>
+                  <span className="other-player-stat" title="Networks">🛣️ {networks}</span>
+                  <span className="other-player-stat" title="Engineers Played">👩‍💻 {engineers}</span>
                 </div>
               </div>
             );
@@ -281,58 +353,52 @@
             </div>
           )}
 
-          {/* Sidebar tabs */}
-          <div className="sidebar-tabs">
-            {[
-              { key: 'resources', label: '🏥 Resources' },
-              { key: 'trade',     label: '🤝 Trade' + (pendingTrades.length > 0 && sidebarTab !== 'trade' ? ' 🔔' : '') },
-              { key: 'chat',      label: '💬 Chat' },
-            ].map(t => (
-              <button
-                key={t.key}
-                className={`sidebar-tab${sidebarTab === t.key ? ' active' : ''}`}
-                onClick={() => setSidebarTab(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* Roll reminder */}
+          {rollReminder && (
+            <div className="roll-reminder" onClick={() => { socket.emit('roll_dice'); setRollReminder(false); }}>
+              🎲 Don't forget to roll!
+            </div>
+          )}
 
-          {/* Tab content */}
-          {sidebarTab === 'resources' && (
-            <window.PlayerHUD
-              player={me}
-              gameState={gameState}
-              myPlayerId={myPlayerId}
-              socket={socket}
-              isMyTurn={isMyTurn}
-              hasRolled={hasRolled}
-              onBuildModeChange={setBuildMode}
-              buildMode={effectiveBuildMode}
-              onFundingCardClick={cardType => setActiveCardModal(cardType)}
-            />
-          )}
-          {sidebarTab === 'trade' && (
-            <window.TradePanel
-              gameState={gameState}
-              myPlayerId={myPlayerId}
-              socket={socket}
-              isMyTurn={isMyTurn}
-              pendingTrades={pendingTrades}
-            />
-          )}
-          {sidebarTab === 'chat' && (
-            <window.Chat
-              messages={messages}
-              myPlayerId={myPlayerId}
-              players={players}
-              socket={socket}
-            />
-          )}
+          {/* Resources + Build */}
+          <window.PlayerHUD
+            player={me}
+            gameState={gameState}
+            myPlayerId={myPlayerId}
+            socket={socket}
+            isMyTurn={isMyTurn}
+            hasRolled={hasRolled}
+            onBuildModeChange={setBuildMode}
+            buildMode={effectiveBuildMode}
+            onFundingCardClick={cardType => setActiveCardModal(cardType)}
+          />
+
+          {/* Trade section */}
+          <div className="sidebar-section-header">
+            🤝 Trade
+            {pendingTrades.length > 0 && (
+              <span className="trade-badge">{pendingTrades.length}</span>
+            )}
+          </div>
+          <window.TradePanel
+            gameState={gameState}
+            myPlayerId={myPlayerId}
+            socket={socket}
+            isMyTurn={isMyTurn}
+            pendingTrades={pendingTrades}
+          />
         </div>
 
-        {/* Other players */}
-        <OthersBar />
+        {/* Bottom area: other players + chat */}
+        <div className="bottom-area">
+          <OthersBar />
+          <window.Chat
+            messages={messages}
+            myPlayerId={myPlayerId}
+            players={players}
+            socket={socket}
+          />
+        </div>
 
         {/* Funding Card Modal */}
         {activeCardModal && (
@@ -341,7 +407,8 @@
             socket={socket}
             canPlay={
               isMyTurn &&
-              hasRolled &&
+              // Engineer can be played before OR after rolling; all others require rolling first
+              (activeCardModal === 'engineer' ? !isInitialPlacement : hasRolled) &&
               !gameState.hasPlayedFundingCard &&
               (me?.fundingCards || []).some(c => c.type === activeCardModal && !c.isNew)
             }
@@ -378,6 +445,29 @@
           </div>
         )}
 
+        {/* Trade exchange animation */}
+        {tradeAnim && (
+          <React.Fragment key={tradeAnim.key}>
+            <div className="trade-anim-card" style={{
+              left: tradeAnim.fromX,
+              top:  tradeAnim.fromY,
+              '--dx': `${tradeAnim.dx}px`,
+              '--dy': `${tradeAnim.dy}px`,
+            }}>
+              {tradeAnim.offeringEmoji}
+            </div>
+            <div className="trade-anim-card" style={{
+              left: tradeAnim.toX,
+              top:  tradeAnim.toY,
+              '--dx': `${-tradeAnim.dx}px`,
+              '--dy': `${-tradeAnim.dy}px`,
+              animationDelay: '0.05s',
+            }}>
+              {tradeAnim.requestingEmoji}
+            </div>
+          </React.Fragment>
+        )}
+
         {/* Steal toast */}
         {stealToast && (
           <div style={{
@@ -401,18 +491,61 @@
             {stealToast}
           </div>
         )}
+
+        {/* Hurry-up overlay */}
+        {hurryUp && (
+          <div key={hurryUp.key} className="hurry-up-overlay">
+            <div className="hurry-up-watch">⌚</div>
+            <div className="hurry-up-text">PLAY OR PASS</div>
+            <div className="hurry-up-from">{hurryUp.fromPlayerName} is waiting</div>
+          </div>
+        )}
       </div>
     );
   }
 
   // ---- Game Over overlay ----
-  function GameOverOverlay({ winnerId, winnerName, onNewGame }) {
+  function GameOverOverlay({ winnerId, winnerName, players, onNewGame }) {
+    const sorted = [...(players || [])].sort((a, b) => (b.victoryPoints || 0) - (a.victoryPoints || 0));
+    const COLOR_MAP = { green: '#2E7D32', blue: '#1565C0', orange: '#E65100', purple: '#6A1B9A' };
     return (
       <div className="game-over-overlay">
         <div className="game-over-card">
           <div className="game-over-emoji">🏆</div>
           <div className="game-over-title">Game Over!</div>
           <div className="game-over-winner">{winnerName} wins!</div>
+
+          {/* Player leaderboard */}
+          <div className="game-over-leaderboard">
+            {sorted.map((p, i) => {
+              const isWinner = p.id === winnerId;
+              const color = COLOR_MAP[p.color] || p.color || '#888';
+              const practices = (p.practiceLocations || []).length;
+              const markets   = (p.stateNetworks || []).length;
+              const networks  = (p.networks || []).length;
+              const cards     = p.fundingCardCount || 0;
+              const resources = Object.values(p.resources || {}).reduce((s, v) => s + v, 0);
+              return (
+                <div
+                  key={p.id}
+                  className={`gol-row${isWinner ? ' gol-winner' : ''}`}
+                >
+                  <span className="gol-rank">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</span>
+                  <span className="gol-dot" style={{ background: color }} />
+                  <span className="gol-name">{p.name}</span>
+                  <span className="gol-vp">⭐ {p.victoryPoints || 0} VP</span>
+                  <div className="gol-stats">
+                    <span title="Practice Locations">🏥 {practices}</span>
+                    <span title="Markets">🏛️ {markets}</span>
+                    <span title="Networks">🛣️ {networks}</span>
+                    <span title="Funding Cards">🃏 {cards}</span>
+                    <span title="Resources in hand">🗂️ {resources}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           <button className="btn-new-game" onClick={onNewGame}>
             🔄 Play Again
           </button>
@@ -672,7 +805,6 @@
             devIncidentPhase={devIncidentPhase}
             mustDiscard={mustDiscard}
             resourceAnimations={resourceAnimations}
-            tradeAlertSeq={tradeAlertSeq}
             stealToast={stealToast}
             socket={socketRef.current}
             onGameOver={() => {}}
@@ -683,6 +815,7 @@
           <GameOverOverlay
             winnerId={gameOver.winnerId}
             winnerName={gameOver.winnerName}
+            players={players}
             onNewGame={handleNewGame}
           />
         )}

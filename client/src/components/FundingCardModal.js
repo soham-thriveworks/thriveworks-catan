@@ -253,9 +253,13 @@ window.FundingCardModal = function FundingCardModal({
               style={{ background: canConfirm ? def.color : undefined }}
               onClick={handlePlay}
               disabled={!canConfirm}
-              title={!canPlay ? 'You can only play cards on your turn after rolling' : undefined}
+              title={!canPlay
+                ? (cardType === 'engineer'
+                    ? 'Play the Engineer card on your turn (before or after rolling)'
+                    : 'You can only play this card on your turn after rolling')
+                : undefined}
             >
-              {canPlay ? `${def.actionLabel} →` : 'Play on your turn'}
+              {canPlay ? `${def.actionLabel} →` : (cardType === 'engineer' ? 'Play on your turn' : 'Play after rolling')}
             </button>
           )}
           {!def.actionLabel && (

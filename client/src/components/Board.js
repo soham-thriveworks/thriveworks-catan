@@ -330,15 +330,46 @@ window.Board = function Board({
             <g
               className="building-icon"
               transform={`translate(${pos.x.toFixed(2)}, ${pos.y.toFixed(2)})`}
+              onClick={isBuildableCity ? () => onVertexClick(v.id) : undefined}
+              style={{ cursor: isBuildableCity ? 'pointer' : 'default' }}
             >
               {isCity ? (
-                // City: larger star/diamond
-                <polygon
-                  points="-10,-10 0,-18 10,-10 10,4 -10,4"
-                  fill={color}
-                  stroke="rgba(255,255,255,0.7)"
-                  strokeWidth={1.5}
-                />
+                // Market: municipal building — pediment + body + steps
+                <>
+                  {/* Steps / base */}
+                  <polygon
+                    points="-13,7 13,7 11,4 -11,4"
+                    fill={color}
+                    stroke="rgba(255,255,255,0.5)"
+                    strokeWidth={1}
+                  />
+                  {/* Main building body */}
+                  <rect
+                    x={-10} y={-6} width={20} height={10}
+                    fill={color}
+                    stroke="rgba(255,255,255,0.7)"
+                    strokeWidth={1.5}
+                  />
+                  {/* Triangular pediment / roof */}
+                  <polygon
+                    points="-12,-6 0,-17 12,-6"
+                    fill={color}
+                    stroke="rgba(255,255,255,0.7)"
+                    strokeWidth={1.5}
+                  />
+                  {/* Pediment inner triangle (detail) */}
+                  <polygon
+                    points="-7,-7 0,-13 7,-7"
+                    fill="rgba(255,255,255,0.2)"
+                    stroke="none"
+                  />
+                  {/* Door */}
+                  <rect
+                    x={-3} y={-1} width={6} height={5}
+                    fill="rgba(0,0,0,0.35)"
+                    stroke="none"
+                  />
+                </>
               ) : (
                 // Settlement: house shape
                 <polygon
@@ -368,9 +399,9 @@ window.Board = function Board({
             <circle
               cx={pos.x.toFixed(2)}
               cy={pos.y.toFixed(2)}
-              r={16}
-              fill="none"
-              stroke="rgba(245,166,35,0.8)"
+              r={18}
+              fill="rgba(245,166,35,0.08)"
+              stroke="rgba(245,166,35,0.85)"
               strokeWidth={2.5}
               strokeDasharray="5 3"
               onClick={() => onVertexClick(v.id)}

@@ -480,6 +480,8 @@ io.on('connection', (socket) => {
       accepted: true,
       fromPlayerId: trade.fromPlayerId,
       toPlayerId: trade.toPlayerId,
+      offering: trade.offering,
+      requesting: trade.requesting,
     });
 
     broadcastGameState(roomCode);
@@ -497,7 +499,8 @@ io.on('connection', (socket) => {
     if (result.error) return sendError(socket, result.error);
 
     const trade = result.trade;
-    io.to(roomCode).emit('trade_resolved', {
+    // Only emit to the player who declined — other players can still accept
+    socket.emit('trade_resolved', {
       tradeId: trade.tradeId,
       accepted: false,
       fromPlayerId: trade.fromPlayerId,
@@ -551,6 +554,16 @@ io.on('connection', (socket) => {
     if (result.error) return sendError(socket, result.error);
 
     broadcastGameState(roomCode);
+  });
+
+  // -------------------------------------------------------------------------
+  // hurry_up — any non-active player nudges the current player
+  // -------------------------------------------------------------------------
+  socket.on('hurry_up', () => {
+    const ctx = getRoomContext(socket);
+    if (!ctx) return;
+    const { roomCode, playerDef } = ctx;
+    io.to(roomCode).emit('hurry_up', { fromPlayerName: playerDef.name });
   });
 
   // -------------------------------------------------------------------------

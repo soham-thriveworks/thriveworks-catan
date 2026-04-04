@@ -91,8 +91,9 @@ class TradeManager {
     if (!trade) return { error: 'Trade not found.' };
     if (trade.status !== 'pending') return { error: 'Trade is no longer pending.' };
 
-    trade.status = 'declined';
-    trade.toPlayerId = playerId;
+    // Track per-player declines without closing the trade for everyone
+    if (!trade.decliners) trade.decliners = new Set();
+    trade.decliners.add(playerId);
     return { trade };
   }
 

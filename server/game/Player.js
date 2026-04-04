@@ -174,7 +174,14 @@ class Player {
       stateNetworks: [...this.stateNetworks],
       hasLargestNetwork: this.hasLargestNetwork,
       hasLargestEngineeringTeam: this.hasLargestEngineeringTeam,
-      victoryPoints: this.publicVictoryPoints(),
+      victoryPoints: isSelf ? this.victoryPoints() : this.publicVictoryPoints(),
+      secretVictoryPoints: isSelf ? (() => {
+        let n = 0;
+        for (const card of this.fundingCards) {
+          if (Player.VP_CARD_TYPES.has(card.type)) n++;
+        }
+        return n;
+      })() : undefined,
       isConnected: this.isConnected,
     };
   }

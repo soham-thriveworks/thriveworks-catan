@@ -43,6 +43,7 @@ window.PlayerHUD = function PlayerHUD({
   const resources = player.resources || {};
   const fundingCards = player.fundingCards || [];
   const vp = player.victoryPoints || 0;
+  const secretVP = player.secretVictoryPoints || 0;
 
   // Build costs
   const BUILD_ITEMS = [
@@ -146,7 +147,14 @@ window.PlayerHUD = function PlayerHUD({
         <div className="player-info-row">
           <div className="player-color-badge" style={{ backgroundColor: playerColor }} />
           <span className="player-name-hud">{player.name || 'You'}</span>
-          <span className="player-vp">⭐ {vp} VP</span>
+          <span className="player-vp">
+            ⭐ {vp} VP
+            {secretVP > 0 && (
+              <span className="secret-vp-badge" title={`${secretVP} secret VP from funding card${secretVP > 1 ? 's' : ''}`}>
+                🤫 +{secretVP}
+              </span>
+            )}
+          </span>
         </div>
         {isMyTurn && (
           <div style={{
@@ -186,7 +194,9 @@ window.PlayerHUD = function PlayerHUD({
           <span className="funding-count-badge">🃏 {fundingCards.length} card{fundingCards.length !== 1 ? 's' : ''}</span>
           {fundingCards.map((card, idx) => {
             const cardType = typeof card === 'object' ? card.type : card;
-            const canPlayNow = isMyTurn && hasRolled && PLAY_CARD_MAP[cardType]?.emit !== null && PLAY_CARD_MAP[cardType]?.emit !== undefined;
+            const isActionCard = PLAY_CARD_MAP[cardType]?.emit !== null && PLAY_CARD_MAP[cardType]?.emit !== undefined;
+            const canPlayNow = isMyTurn && !isSetupPhase && !gameState.hasPlayedFundingCard && isActionCard &&
+              (cardType === 'engineer' ? true : hasRolled);
             return (
               <button
                 key={idx}
