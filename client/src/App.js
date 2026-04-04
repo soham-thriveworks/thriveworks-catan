@@ -38,6 +38,29 @@
     const [stealAnim, setStealAnim] = useState(null);
     const [tradeAnim, setTradeAnim] = useState(null);
 
+    // ---- Resizable bottom panel ----
+    const bottomAreaRef = useRef(null);
+    const [playersWidth, setPlayersWidth] = useState(260);
+    const bottomDragging = useRef(false);
+
+    function onDividerMouseDown(e) {
+      e.preventDefault();
+      bottomDragging.current = true;
+      function onMove(ev) {
+        if (!bottomDragging.current || !bottomAreaRef.current) return;
+        const rect = bottomAreaRef.current.getBoundingClientRect();
+        const newW = Math.min(Math.max(ev.clientX - rect.left, 120), rect.width - 160);
+        setPlayersWidth(newW);
+      }
+      function onUp() {
+        bottomDragging.current = false;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      }
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
     const RES_EMOJI_TRADE = { therapist: '🧑‍⚕️', payerContracts: '📋', coeStaff: '👥', rcmStaff: '💰', clinOps: '⚙️' };
     function getFirstResourceEmoji(resources) {
       if (!resources) return '🃏';
@@ -256,9 +279,9 @@
     // ---- Other players strip ----
     function OthersBar() {
       const others = players.filter(p => p.id !== myPlayerId);
-      if (!others.length) return <div className="others-bar" />;
+      if (!others.length) return null;
       return (
-        <div className="others-bar">
+        <>
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
             Players:
           </span>
@@ -293,7 +316,7 @@
               </div>
             );
           })}
-        </div>
+        </>
       );
     }
 
@@ -389,9 +412,12 @@
           />
         </div>
 
-        {/* Bottom area: other players + chat */}
-        <div className="bottom-area">
-          <OthersBar />
+        {/* Bottom area: other players + chat (resizable) */}
+        <div className="bottom-area" ref={bottomAreaRef}>
+          <div className="others-bar" style={{ flex: `0 0 ${playersWidth}px`, width: playersWidth }}>
+            <OthersBar />
+          </div>
+          <div className="bottom-divider" onMouseDown={onDividerMouseDown} />
           <window.Chat
             messages={messages}
             myPlayerId={myPlayerId}
@@ -743,6 +769,7 @@
 
     // ---- New game ----
     function handleNewGame() {
+      try { localStorage.removeItem('tw_catan_session'); } catch (_) {}
       setGameOver(null);
       setGameState(null);
       setMyPlayerId(null);

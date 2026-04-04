@@ -6,16 +6,27 @@
 window.Lobby = function Lobby({ socket, onGameStart }) {
   const { useState, useEffect } = React;
 
+  const SESSION_KEY = 'tw_catan_session';
+
+  function saveSession(data) {
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (_) {}
+  }
+
   const [tab, setTab] = React.useState('create'); // 'create' | 'join'
   const [playerName, setPlayerName] = React.useState('');
   const [color, setColor] = React.useState('green');
   const [roomCode, setRoomCode] = React.useState('');
   const [joinCode, setJoinCode] = React.useState('');
-  const [phase, setPhase] = React.useState('form'); // 'form' | 'waiting'
+  const [phase, setPhase] = React.useState('form'); // 'form' | 'waiting' | 'rejoining'
   const [waitingPlayers, setWaitingPlayers] = React.useState([]);
   const [myPlayerId, setMyPlayerId] = React.useState(null);
   const [isHost, setIsHost] = React.useState(false);
   const [error, setError] = React.useState('');
+
+  // Saved session for rejoin prompt
+  const [savedSession, setSavedSession] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
+  });
 
   const PLAYER_COLORS = [
     { key: 'green',  hex: '#2E7D32', label: 'Green'  },
@@ -25,6 +36,7 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
   ];
 
   const myPlayerIdRef = React.useRef(null);
+  const rejoinPendingRef = React.useRef(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -37,13 +49,14 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
       setPhase('waiting');
       setWaitingPlayers([{ id: playerId, name: playerName, color, isHost: true }]);
       setError('');
+      saveSession({ roomCode: code, playerId, playerName, color, gameStarted: false });
     };
 
     const onRoomJoined = ({ players, roomCode: code, playerId }) => {
-      // Only update our own playerId — other players' join events arrive without a playerId
       if (playerId) {
         myPlayerIdRef.current = playerId;
         setMyPlayerId(playerId);
+        saveSession({ roomCode: code, playerId, playerName, color, gameStarted: false });
       }
       setRoomCode(code);
       setWaitingPlayers(players);
@@ -52,20 +65,50 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
     };
 
     const onGameStarted = ({ gameState }) => {
+      // Mark game as started in session so rejoin knows to restore game screen
+      try {
+        const s = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+        saveSession({ ...s, gameStarted: true });
+      } catch (_) {}
       onGameStart(gameState, myPlayerIdRef.current);
     };
 
-    const onError = ({ message }) => setError(message);
+    const onError = ({ message }) => {
+      if (rejoinPendingRef.current) {
+        // Rejoin failed — clear the stale session so user isn't stuck in a loop
+        rejoinPendingRef.current = false;
+        try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+        setSavedSession(null);
+      }
+      setError(message);
+      setPhase('form');
+    };
+
+    const onRejoinSuccess = ({ playerId, roomCode: code, gameState, players, gameStarted }) => {
+      rejoinPendingRef.current = false;
+      myPlayerIdRef.current = playerId;
+      setMyPlayerId(playerId);
+      setRoomCode(code);
+      setSavedSession(null);
+      if (gameStarted && gameState) {
+        onGameStart(gameState, playerId);
+      } else {
+        setWaitingPlayers(players || []);
+        setPhase('waiting');
+      }
+    };
 
     socket.on('room_created', onRoomCreated);
     socket.on('room_joined', onRoomJoined);
     socket.on('game_started', onGameStarted);
+    socket.on('rejoin_success', onRejoinSuccess);
     socket.on('error', onError);
 
     return () => {
       socket.off('room_created', onRoomCreated);
       socket.off('room_joined', onRoomJoined);
       socket.off('game_started', onGameStarted);
+      socket.off('rejoin_success', onRejoinSuccess);
       socket.off('error', onError);
     };
   }, [socket]);
@@ -85,6 +128,29 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
 
   const handleStart = () => {
     socket.emit('start_game');
+  };
+
+  const handleRejoin = () => {
+    if (!savedSession) return;
+    rejoinPendingRef.current = true;
+    setPhase('rejoining');
+    setError('');
+    socket.emit('rejoin_room', { roomCode: savedSession.roomCode, playerId: savedSession.playerId });
+    // Fallback: if no response in 5s, clear session and go back to form
+    setTimeout(() => {
+      if (rejoinPendingRef.current) {
+        rejoinPendingRef.current = false;
+        try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+        setSavedSession(null);
+        setError('Could not rejoin — the room may have ended.');
+        setPhase('form');
+      }
+    }, 5000);
+  };
+
+  const handleDismissSession = () => {
+    try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+    setSavedSession(null);
   };
 
   const canStart = waitingPlayers.length >= 2; // Allow 2–4
@@ -151,6 +217,23 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
     );
   }
 
+  // ---- Render: Rejoining ----
+  if (phase === 'rejoining') {
+    return (
+      <div className="lobby-screen">
+        <div className="lobby-logo-wrap">
+          <img className="lobby-logo" src="/thriveworks-logo.png" alt="Thriveworks" onError={e => { e.target.style.display='none'; }} />
+          <div className="lobby-title">Thriveworks Catan</div>
+        </div>
+        <div className="lobby-card" style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🔄</div>
+          <div style={{ color: '#fff', fontWeight: 600, fontSize: '16px', marginBottom: '8px' }}>Rejoining room {savedSession?.roomCode}…</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>Hang tight, reconnecting you to your game.</div>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Render: Form ----
   return (
     <div className="lobby-screen">
@@ -161,6 +244,23 @@ window.Lobby = function Lobby({ socket, onGameStart }) {
       </div>
 
       <div className="lobby-card">
+        {/* Rejoin banner */}
+        {savedSession && (
+          <div className="rejoin-banner">
+            <div className="rejoin-banner-text">
+              <span className="rejoin-banner-icon">🔌</span>
+              <div>
+                <div className="rejoin-banner-title">Resume previous game?</div>
+                <div className="rejoin-banner-sub">Room <strong>{savedSession.roomCode}</strong> as <strong>{savedSession.playerName}</strong></div>
+              </div>
+            </div>
+            <div className="rejoin-banner-actions">
+              <button className="btn-rejoin" onClick={handleRejoin}>Rejoin</button>
+              <button className="btn-rejoin-dismiss" onClick={handleDismissSession}>✕</button>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="lobby-tabs">
           <button

@@ -567,6 +567,46 @@ io.on('connection', (socket) => {
   });
 
   // -------------------------------------------------------------------------
+  // rejoin_room
+  // -------------------------------------------------------------------------
+  socket.on('rejoin_room', ({ roomCode, playerId } = {}) => {
+    if (!roomCode || !playerId) return sendError(socket, 'roomCode and playerId required.');
+
+    const room = rules.getRoom(roomCode);
+    if (!room) return sendError(socket, 'Room not found or has ended.');
+
+    const playerDef = room.playerDefs.find(p => p.id === playerId);
+    if (!playerDef) return sendError(socket, 'Player not found in that room.');
+
+    // Update socket mapping
+    rules.updatePlayerSocket(roomCode, playerId, socket.id);
+    socket.join(roomCode);
+    socketToRoom.set(socket.id, roomCode);
+
+    if (room.gameState) {
+      // Game is in progress — send current state back
+      const publicState = room.gameState.toPublicState(playerId);
+      socket.emit('rejoin_success', {
+        playerId,
+        roomCode,
+        gameState: publicState,
+        gameStarted: true,
+      });
+    } else {
+      // Still in lobby
+      const players = room.playerDefs.map(p => ({ id: p.id, name: p.name, color: p.color }));
+      socket.emit('rejoin_success', {
+        playerId,
+        roomCode,
+        players,
+        gameStarted: false,
+      });
+    }
+
+    console.log(`[rejoin] ${playerDef.name} rejoined ${roomCode}`);
+  });
+
+  // -------------------------------------------------------------------------
   // disconnect
   // -------------------------------------------------------------------------
   socket.on('disconnect', () => {

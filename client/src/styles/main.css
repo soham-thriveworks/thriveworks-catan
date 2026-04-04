@@ -132,6 +132,51 @@ input:focus, select:focus { border-color: var(--primary); }
   box-shadow: 0 8px 40px rgba(0,0,0,0.4);
 }
 
+/* Rejoin session banner */
+.rejoin-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(245,166,35,0.1);
+  border: 1px solid rgba(245,166,35,0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.rejoin-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.rejoin-banner-icon { font-size: 20px; flex-shrink: 0; }
+.rejoin-banner-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+.rejoin-banner-sub { font-size: 11px; color: rgba(255,255,255,0.55); }
+.rejoin-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-rejoin {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-rejoin:hover { opacity: 0.85; }
+.btn-rejoin-dismiss {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.5);
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-rejoin-dismiss:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
 .lobby-tabs {
   display: flex;
   gap: 8px;
@@ -434,8 +479,35 @@ input:focus, select:focus { border-color: var(--primary); }
   padding: 10px 12px;
   overflow-y: auto;
   background: transparent;
-  flex: 0 0 200px;
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+/* Drag handle between players and chat */
+.bottom-divider {
+  width: 6px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: rgba(255,255,255,0.06);
+  border-left: 1px solid rgba(255,255,255,0.06);
   border-right: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s;
+  position: relative;
+}
+.bottom-divider:hover,
+.bottom-divider:active {
+  background: rgba(245,166,35,0.25);
+}
+.bottom-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.2);
 }
 .other-player-card {
   background: rgba(255,255,255,0.05);
